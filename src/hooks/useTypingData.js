@@ -1,29 +1,29 @@
 import { useRef } from 'react';
 
 export const useTypingData = () => {
-  const keystrokeData = useRef([]);
-  const previousKey = useRef(null);
+  const inputData = useRef([]);
+  const previousEvent = useRef(null);
   const previousTimestamp = useRef(null);
   
-  const addKeystroke = (prevKey, currentKey, interval) => {
-    keystrokeData.current.push({
-      previousKey: prevKey,
-      currentKey: currentKey,
-      interval: interval
+  const addEvent = (eventType, eventData, interval) => {
+    inputData.current.push({
+      eventType,
+      ...eventData,
+      interval
     });
   };
   
-  const clearKeystrokeData = () => {
-    keystrokeData.current = [];
-    previousKey.current = null;
+  const clearInputData = () => {
+    inputData.current = [];
+    previousEvent.current = null;
     previousTimestamp.current = null;
   };
   
   return {
-    keystrokeData: keystrokeData.current,
-    addKeystroke,
-    clearKeystrokeData,
-    previousKey,
+    inputData: inputData.current,
+    addEvent,
+    clearInputData,
+    previousEvent,
     previousTimestamp
   };
 }; 

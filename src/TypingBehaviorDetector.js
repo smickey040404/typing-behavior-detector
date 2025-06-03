@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './TypingBehaviorDetector.css';
 import { useTypingModel } from './hooks/useTypingModel';
 import { useTypingData } from './hooks/useTypingData';
@@ -11,7 +11,11 @@ const TypingBehaviorDetector = () => {
   const [inputValue, setInputValue] = useState('');
   const [trainingTime] = useState(30); // 30 seconds training time
   const [timer, setTimer] = useState(trainingTime);
-  const [lastKeyPressed, setLastKeyPressed] = useState('');
+  const [lastEventInfo, setLastEventInfo] = useState('');
+  const [eventCount, setEventCount] = useState({ typing: 0, click: 0, move: 0, scroll: 0 });
+  
+  const containerRef = useRef(null);
+  const throttleRef = useRef({ move: 0, scroll: 0 });
   
   const {
     isTraining,
@@ -27,10 +31,10 @@ const TypingBehaviorDetector = () => {
   } = useTypingModel();
   
   const {
-    keystrokeData,
-    addKeystroke,
-    clearKeystrokeData,
-    previousKey,
+    inputData,
+    addEvent,
+    clearInputData,
+    previousEvent,
     previousTimestamp
   } = useTypingData();
   
@@ -43,39 +47,176 @@ const TypingBehaviorDetector = () => {
       return () => clearTimeout(countdown);
     } else if (timer === 0 && isTraining) {
       // Training time is up, process the data and train the model
-      trainModel(keystrokeData);
+      trainModel(inputData);
     }
-  }, [timer, isTraining, keystrokeData, trainModel]);
+  }, [timer, isTraining, inputData, trainModel]);
 
   // Load model on component mount
   useEffect(() => {
     loadModel();
   }, [loadModel]);
   
-  const handleKeyDown = async (e) => {
-    const currentTimestamp = Date.now();
-    const currentKey = e.key;
-    
-    setLastKeyPressed(currentKey);
-
-    if (previousKey.current && previousTimestamp.current) {
-      const interval = currentTimestamp - previousTimestamp.current;
+  // Process input event and calculate anomaly score if model is trained
+  const processEvent = async (eventType, eventData) => {
+    try {
+      const currentTimestamp = Date.now();
       
-      if (isTraining) {
-        // Store training data
-        addKeystroke(previousKey.current, currentKey, interval);
-      } else if (modelTrained) {
-        // Calculate anomaly score
-        const score = await calculateAnomalyScore(previousKey.current, currentKey, interval);
-        if (score !== null) {
-          setAnomalyScore(score.toFixed(2));
+      // Get specific event type
+      let specificEventType = eventType;
+      if (eventType === 'mouseClick') {
+        // Map button numbers to names (0=left, 1=middle, 2=right)
+        const buttonNames = ['leftClick', 'middleClick', 'rightClick'];
+        const buttonIndex = eventData.button;
+        if (buttonIndex >= 0 && buttonIndex <= 2) {
+          specificEventType = buttonNames[buttonIndex];
+        } else {
+          specificEventType = 'mouseClick';
+        }
+        console.log(`Mouse click detected: button=${eventData.button}, type=${specificEventType}`);
+      } else if (eventType === 'scroll') {
+        // Differentiate between scroll up and scroll down
+        specificEventType = eventData.deltaY > 0 ? 'scrollDown' : 'scrollUp';
+      }
+      
+      // Update event count
+      setEventCount(prev => {
+        // Create a copy of the previous counts
+        const newCounts = { ...prev };
+        
+        // Increment the specific count based on event type
+        if (eventType === 'typing') {
+          newCounts.typing = (newCounts.typing || 0) + 1;
+        } else if (eventType === 'mouseClick') {
+          newCounts.click = (newCounts.click || 0) + 1;
+          if (eventData.button === 0) {
+            newCounts.leftClick = (newCounts.leftClick || 0) + 1;
+          } else if (eventData.button === 1) {
+            newCounts.middleClick = (newCounts.middleClick || 0) + 1;
+          } else if (eventData.button === 2) {
+            newCounts.rightClick = (newCounts.rightClick || 0) + 1;
+          }
+        } else if (eventType === 'mouseMove') {
+          newCounts.move = (newCounts.move || 0) + 1;
+        } else if (eventType === 'scroll') {
+          newCounts.scroll = (newCounts.scroll || 0) + 1;
+          if (eventData.deltaY > 0) {
+            newCounts.scrollDown = (newCounts.scrollDown || 0) + 1;
+          } else {
+            newCounts.scrollUp = (newCounts.scrollUp || 0) + 1;
+          }
+        }
+        
+        return newCounts;
+      });
+
+      // Set last event info with more specific details
+      let eventInfo;
+      if (eventType === 'typing') {
+        eventInfo = `Key: ${eventData.currentKey}`;
+      } else if (eventType === 'mouseClick') {
+        const buttonNames = ['Left', 'Middle', 'Right'];
+        const buttonName = buttonNames[eventData.button] || 'Unknown';
+        eventInfo = `${buttonName} Click at (${Math.round(eventData.clientX)}, ${Math.round(eventData.clientY)})`;
+      } else if (eventType === 'mouseMove') {
+        eventInfo = `Move: (${Math.round(eventData.movementX)}, ${Math.round(eventData.movementY)})`;
+      } else if (eventType === 'scroll') {
+        const direction = eventData.deltaY > 0 ? 'Down' : 'Up';
+        eventInfo = `Scroll ${direction}: ${Math.abs(Math.round(eventData.deltaY))}`;
+      }
+      setLastEventInfo(eventInfo);
+
+      if (previousEvent.current && previousTimestamp.current) {
+        const interval = currentTimestamp - previousTimestamp.current;
+        
+        if (isTraining) {
+          // Store training data with specific event type
+          addEvent(specificEventType, eventData, interval);
+        } else if (modelTrained) {
+          // Calculate anomaly score
+          const score = await calculateAnomalyScore(specificEventType, eventData, interval);
+          if (score !== null) {
+            setAnomalyScore(score.toFixed(2));
+          }
         }
       }
-    }
 
-    previousKey.current = currentKey;
-    previousTimestamp.current = currentTimestamp;
+      previousEvent.current = { 
+        type: specificEventType,
+        ...eventData 
+      };
+      previousTimestamp.current = currentTimestamp;
+    } catch (error) {
+      console.error("Error processing event:", error);
+    }
   };
+  
+  const handleKeyDown = (e) => {
+    processEvent('typing', {
+      previousKey: previousEvent.current?.currentKey || '',
+      currentKey: e.key
+    });
+  };
+
+  const handleMouseDown = (e) => {
+    console.log(`Mouse button pressed: ${e.button} (0=left, 1=middle, 2=right)`);
+    processEvent('mouseClick', {
+      button: e.button,
+      clientX: e.clientX,
+      clientY: e.clientY
+    });
+  };
+  
+  const handleMouseMove = (e) => {
+    // Throttle mouse move events to avoid too many events
+    const now = Date.now();
+    if (now - throttleRef.current.move < 100) return; // 100ms throttle
+    throttleRef.current.move = now;
+    
+    processEvent('mouseMove', {
+      movementX: e.movementX,
+      movementY: e.movementY,
+      clientX: e.clientX,
+      clientY: e.clientY
+    });
+  };
+  
+  const handleScroll = (e) => {
+    // Throttle scroll events
+    const now = Date.now();
+    if (now - throttleRef.current.scroll < 100) return; // 100ms throttle
+    throttleRef.current.scroll = now;
+    
+    processEvent('scroll', {
+      deltaY: e.deltaY,
+      clientX: e.clientX || window.innerWidth / 2, // Might not have coordinates
+      clientY: e.clientY || window.innerHeight / 2
+    });
+  };
+
+  // Handle context menu (right click)
+  const handleContextMenu = (e) => {
+    // Prevent default context menu to properly capture right clicks
+    e.preventDefault();
+  };
+
+  // Setup and cleanup event listeners
+  useEffect(() => {
+    const container = containerRef.current;
+    
+    if (container) {
+      container.addEventListener('mousedown', handleMouseDown);
+      container.addEventListener('mousemove', handleMouseMove);
+      container.addEventListener('wheel', handleScroll);
+      container.addEventListener('contextmenu', handleContextMenu);
+      
+      return () => {
+        container.removeEventListener('mousedown', handleMouseDown);
+        container.removeEventListener('mousemove', handleMouseMove);
+        container.removeEventListener('wheel', handleScroll);
+        container.removeEventListener('contextmenu', handleContextMenu);
+      };
+    }
+  }, [containerRef.current]);
 
   const handleInputChange = (e) => {
     setInputValue(e.target.value);
@@ -83,26 +224,29 @@ const TypingBehaviorDetector = () => {
   
   const handleResetModel = () => {
     resetModel();
-    clearKeystrokeData();
+    clearInputData();
     setInputValue('');
     setTimer(trainingTime);
-    setLastKeyPressed('');
-    setAnomalyScore(null);
+    setLastEventInfo('');
+    setEventCount({ typing: 0, click: 0, move: 0, scroll: 0 });
+    throttleRef.current = { move: 0, scroll: 0 };
   };
 
   return (
-    <div className="typing-detector-container">
-      <h1>Typing Behavior Anomaly Detector</h1>
+    <div className="typing-detector-container" ref={containerRef}>
+      <div className='typing-detector'>
+      <h1>User Input Behavior Anomaly Detector</h1>
       
       <div className="status-section">
         {isTraining ? (
           <TrainingStatus 
             timer={timer} 
-            sampleCount={keystrokeData.length} 
-            lastKeyPressed={lastKeyPressed} 
+            sampleCount={inputData.length} 
+            lastEventInfo={lastEventInfo} 
+            eventCount={eventCount}
           />
         ) : (
-          <PredictionStatus lastKeyPressed={lastKeyPressed} />
+          <PredictionStatus lastEventInfo={lastEventInfo} eventCount={eventCount} />
         )}
       </div>
 
@@ -112,7 +256,7 @@ const TypingBehaviorDetector = () => {
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder="Start typing here..."
+          placeholder="Type here, click, move mouse, or scroll..."
           className="typing-input"
           autoFocus
         />
@@ -129,6 +273,7 @@ const TypingBehaviorDetector = () => {
       </div>
 
       <InfoSection trainingTime={trainingTime} />
+      </div>
     </div>
   );
 };
