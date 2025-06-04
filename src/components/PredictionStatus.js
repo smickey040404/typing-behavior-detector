@@ -5,27 +5,42 @@ export const PredictionStatus = ({ lastEventInfo, eventCount }) => {
     <div className="prediction-status">
       <p>Model trained! Continue interacting to see anomaly detection</p>
       
-      <div className="event-stats">
-        <p>Event Counts:</p>
-        <ul className="event-counts-list">
-          <li>Typing: {eventCount.typing || 0}</li>
-          <li>
-            Mouse Clicks: {eventCount.click || 0}
-            <ul>
-              <li>Left: {eventCount.leftClick || 0}</li>
-              <li>Middle: {eventCount.middleClick || 0}</li>
-              <li>Right: {eventCount.rightClick || 0}</li>
-            </ul>
-          </li>
-          <li>Mouse Movement: {eventCount.move || 0}</li>
-          <li>
-            Scrolling: {eventCount.scroll || 0}
-            <ul>
-              <li>Up: {eventCount.scrollUp || 0}</li>
-              <li>Down: {eventCount.scrollDown || 0}</li>
-            </ul>
-          </li>
-        </ul>
+      <div className="event-stats-container">
+        <h3 className="event-stats-title">Event Activity</h3>
+        <div className="event-stats-grid">
+          <div className="event-stat-card">
+            <div className="event-icon keyboard-icon">⌨️</div>
+            <div className="event-count">{eventCount.typing || 0}</div>
+            <div className="event-label">Keystrokes</div>
+          </div>
+          
+          <div className="event-stat-card">
+            <div className="event-icon mouse-icon">🖱️</div>
+            <div className="event-count">{eventCount.click || 0}</div>
+            <div className="event-label">Clicks</div>
+            <div className="event-details">
+              <span className="detail-item">L: {eventCount.leftClick || 0}</span>
+              <span className="detail-item">M: {eventCount.middleClick || 0}</span>
+              <span className="detail-item">R: {eventCount.rightClick || 0}</span>
+            </div>
+          </div>
+          
+          <div className="event-stat-card">
+            <div className="event-icon move-icon">↔️</div>
+            <div className="event-count">{eventCount.move || 0}</div>
+            <div className="event-label">Movements</div>
+          </div>
+          
+          <div className="event-stat-card">
+            <div className="event-icon scroll-icon">⇅</div>
+            <div className="event-count">{eventCount.scroll || 0}</div>
+            <div className="event-label">Scrolls</div>
+            <div className="event-details">
+              <span className="detail-item">↑: {eventCount.scrollUp || 0}</span>
+              <span className="detail-item">↓: {eventCount.scrollDown || 0}</span>
+            </div>
+          </div>
+        </div>
       </div>
       
       {lastEventInfo && (

@@ -7,7 +7,7 @@ A React.js application that uses TensorFlow.js to detect anomalies in user typin
 - **Automatic Training**: Model training begins immediately when a user starts typing
 - **Unsupervised Learning**: Uses an autoencoder neural network for anomaly detection
 - **Real-time Detection**: After training, continuously monitors typing patterns for anomalies
-- **Local Model Persistence**: Saves trained models to browser localStorage
+- **IndexedDB Model Persistence**: Saves trained models to browser IndexedDB for larger storage capacity
 - **No Manual Controls**: Fully automated training and prediction process
 - **Visual Feedback**: Real-time anomaly score display with visual indicators
 - **Full Character Support**: Tracks ALL keyboard inputs including letters, numbers, symbols, and special keys
@@ -33,7 +33,7 @@ A React.js application that uses TensorFlow.js to detect anomalies in user typin
 ### Frontend
 - **React.js**: Component-based UI framework
 - **TensorFlow.js**: Browser-based machine learning
-- **LocalStorage**: Model persistence
+- **IndexedDB**: Model persistence with larger storage capacity
 
 ### Machine Learning Model
 - **Type**: Autoencoder neural network
@@ -73,13 +73,13 @@ A React.js application that uses TensorFlow.js to detect anomalies in user typin
 
 ## Model Storage
 
-The trained model and statistics are saved to browser localStorage:
-- **Model**: `localstorage://typing-behavior-model`
-- **Statistics**: `typing-behavior-stats` (threshold, normalization parameters)
+The trained model and statistics are saved to browser IndexedDB:
+- **Model**: `indexeddb://input-behavior-model`
+- **Statistics**: Stored in separate IndexedDB store `model-stats`
 
 ## Dependencies
 
-- React.js (v18+)
+- React.js (v19+)
 - TensorFlow.js (v4+)
 - Standard React development dependencies
 

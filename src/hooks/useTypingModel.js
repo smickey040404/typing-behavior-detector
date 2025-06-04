@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import { extractFeatures } from '../utils/featureExtraction';
+import { saveModelStats, loadModelStats, deleteModelStats } from '../utils/indexedDBHelper';
 
 export const useTypingModel = () => {
   const [isTraining, setIsTraining] = useState(true);
@@ -10,6 +11,8 @@ export const useTypingModel = () => {
   const autoencoder = useRef(null);
   const normalThreshold = useRef(0);
   const featureStats = useRef({ mean: null, std: null });
+  
+  const MODEL_PATH = 'indexeddb://input-behavior-model';
   
   const createAutoencoder = (inputSize) => {
     const hiddenSize = Math.max(Math.floor(inputSize * 1.5), 5);
@@ -98,7 +101,7 @@ export const useTypingModel = () => {
       );
       normalThreshold.current = meanError + 2 * stdError;
       
-      // Save model to localStorage
+      // Save model to IndexedDB
       await saveModel();
       
       // Cleanup tensors
@@ -122,18 +125,30 @@ export const useTypingModel = () => {
 
   const saveModel = async () => {
     if (autoencoder.current) {
-      await autoencoder.current.save('localstorage://input-behavior-model');
-      localStorage.setItem('input-behavior-stats', JSON.stringify({
-        threshold: normalThreshold.current,
-        featureStats: featureStats.current
-      }));
+      try {
+        // Save model using TensorFlow.js built-in IndexedDB support
+        await autoencoder.current.save(MODEL_PATH);
+        
+        // Save additional statistics to our custom IndexedDB store
+        await saveModelStats({
+          threshold: normalThreshold.current,
+          featureStats: featureStats.current
+        });
+        
+        console.log('Model and stats saved to IndexedDB successfully');
+      } catch (error) {
+        console.error('Error saving model to IndexedDB:', error);
+      }
     }
   };
 
   const loadModel = useCallback(async () => {
     try {
-      const loadedModel = await tf.loadLayersModel('localstorage://input-behavior-model');
-      const stats = JSON.parse(localStorage.getItem('input-behavior-stats'));
+      // Try to load model from IndexedDB
+      const loadedModel = await tf.loadLayersModel(MODEL_PATH);
+      
+      // Load statistics from our custom IndexedDB store
+      const stats = await loadModelStats();
       
       if (loadedModel && stats) {
         autoencoder.current = loadedModel;
@@ -141,10 +156,12 @@ export const useTypingModel = () => {
         featureStats.current = stats.featureStats;
         setModelTrained(true);
         setIsTraining(false);
-        console.log('Model loaded from storage');
+        console.log('Model loaded from IndexedDB successfully');
+      } else {
+        console.log('Could not find complete model data in IndexedDB');
       }
     } catch (error) {
-      console.log('No saved model found');
+      console.log('No saved model found in IndexedDB:', error.message);
     }
   }, []);
 
@@ -206,10 +223,15 @@ export const useTypingModel = () => {
 
   const resetModel = useCallback(async () => {
     try {
-      await tf.io.removeModel('localstorage://input-behavior-model');
-      localStorage.removeItem('input-behavior-stats');
+      // Remove model from IndexedDB
+      await tf.io.removeModel(MODEL_PATH);
+      
+      // Remove model stats from IndexedDB
+      await deleteModelStats();
+      
+      console.log('Model data cleared from IndexedDB successfully');
     } catch (error) {
-      console.log('No saved model to delete');
+      console.log('Error clearing model data:', error.message);
     }
     
     setIsTraining(true);

@@ -231,4 +231,125 @@ h1 {
   background-color: #f0f0f0;
   border-radius: 4px;
   margin-top: 10px;
+}
+
+/* Event Stats Styling */
+.event-stats-container {
+  margin: 20px 0;
+  padding: 15px;
+  border-radius: 12px;
+  background-color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.event-stats-title {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #2c3e50;
+  margin-bottom: 15px;
+  font-weight: 600;
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.event-stats-title:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 3px;
+  background: linear-gradient(90deg, #3498db, #9b59b6);
+  border-radius: 2px;
+}
+
+.event-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.event-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 15px 10px;
+  border-radius: 10px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.event-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.event-icon {
+  font-size: 1.8rem;
+  margin-bottom: 10px;
+}
+
+.event-count {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2c3e50;
+  line-height: 1;
+  margin-bottom: 5px;
+}
+
+.event-label {
+  font-size: 0.85rem;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.event-details {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+  width: 100%;
+}
+
+.detail-item {
+  font-size: 0.8rem;
+  color: #34495e;
+  background-color: rgba(52, 152, 219, 0.1);
+  padding: 3px 8px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+/* Color variations for each event type */
+.keyboard-icon {
+  color: #3498db;
+}
+
+.mouse-icon {
+  color: #e74c3c;
+}
+
+.move-icon {
+  color: #2ecc71;
+}
+
+.scroll-icon {
+  color: #f39c12;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .event-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .event-count {
+    font-size: 1.6rem;
+  }
 } 
