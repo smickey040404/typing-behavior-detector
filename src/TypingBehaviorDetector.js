@@ -6,16 +6,32 @@ import { TrainingStatus } from './components/TrainingStatus';
 import { PredictionStatus } from './components/PredictionStatus';
 import { InfoSection } from './components/InfoSection';
 import { ScoreSection } from './components/ScoreSection';
+import { ConfigPanel } from './components/ConfigPanel';
 
 const TypingBehaviorDetector = () => {
   const [inputValue, setInputValue] = useState('');
-  const [trainingTime] = useState(30); // 30 seconds training time
-  const [timer, setTimer] = useState(trainingTime);
+  const [trainingConfig, setTrainingConfig] = useState({
+    trainingPeriod: 60, // Default 60 seconds (1 minute)
+    minSamples: 200,    // Minimum samples before training completes
+    sensitivity: 'medium', // Detection sensitivity (low, medium, high)
+    featureImportance: { // Weights for different event types
+      typing: 1.0,
+      mouseMove: 0.7,
+      mouseClick: 0.8, 
+      scroll: 0.6
+    }
+  });
+  
+  const [timer, setTimer] = useState(trainingConfig.trainingPeriod);
   const [lastEventInfo, setLastEventInfo] = useState('');
   const [eventCount, setEventCount] = useState({ typing: 0, click: 0, move: 0, scroll: 0 });
+  const [showConfig, setShowConfig] = useState(false);
+  const [userStatus, setUserStatus] = useState('original'); // 'original', 'unknown', 'different'
+  const [anomalyHistory, setAnomalyHistory] = useState([]);
   
   const containerRef = useRef(null);
   const throttleRef = useRef({ move: 0, scroll: 0 });
+  const sessionId = useRef(Date.now().toString(36) + Math.random().toString(36).substring(2));
   
   const {
     isTraining,
@@ -24,10 +40,14 @@ const TypingBehaviorDetector = () => {
     setModelTrained,
     anomalyScore,
     setAnomalyScore,
+    trainingProgress,
+    trainingStatus,
     trainModel,
     calculateAnomalyScore,
     resetModel,
-    loadModel
+    loadModel,
+    pauseTraining,
+    resumeTraining
   } = useTypingModel();
   
   const {
@@ -47,14 +67,62 @@ const TypingBehaviorDetector = () => {
       return () => clearTimeout(countdown);
     } else if (timer === 0 && isTraining) {
       // Training time is up, process the data and train the model
-      trainModel(inputData);
+      if (inputData.length >= trainingConfig.minSamples) {
+        trainModel(inputData, {
+          minSamples: trainingConfig.minSamples,
+          epochs: 150,
+          batchSize: 32
+        });
+      } else {
+        // Not enough data yet, extend the timer
+        setTimer(30); // Add 30 more seconds
+      }
     }
-  }, [timer, isTraining, inputData, trainModel]);
+  }, [timer, isTraining, inputData, trainModel, trainingConfig]);
 
   // Load model on component mount
   useEffect(() => {
     loadModel();
   }, [loadModel]);
+  
+  // Track anomaly history
+  useEffect(() => {
+    if (anomalyScore !== null && modelTrained) {
+      // Add to rolling history (last 20 events)
+      setAnomalyHistory(prev => {
+        const newHistory = [...prev, parseFloat(anomalyScore)];
+        if (newHistory.length > 20) {
+          return newHistory.slice(-20);
+        }
+        return newHistory;
+      });
+    }
+  }, [anomalyScore, modelTrained]);
+  
+  // Determine user status based on anomaly history
+  useEffect(() => {
+    if (anomalyHistory.length >= 10 && modelTrained) {
+      // Calculate average recent anomaly score
+      const recentAvg = anomalyHistory.slice(-10).reduce((sum, score) => sum + score, 0) / 10;
+      
+      // Determine user status based on average score and sensitivity
+      const thresholds = {
+        low: { unknown: 35, different: 55 },
+        medium: { unknown: 30, different: 45 },
+        high: { unknown: 25, different: 40 }
+      };
+      
+      const { unknown, different } = thresholds[trainingConfig.sensitivity] || thresholds.medium;
+      
+      if (recentAvg < unknown) {
+        setUserStatus('original');
+      } else if (recentAvg < different) {
+        setUserStatus('unknown');
+      } else {
+        setUserStatus('different');
+      }
+    }
+  }, [anomalyHistory, modelTrained, trainingConfig.sensitivity]);
   
   // Process input event and calculate anomaly score if model is trained
   const processEvent = async (eventType, eventData) => {
@@ -72,7 +140,6 @@ const TypingBehaviorDetector = () => {
         } else {
           specificEventType = 'mouseClick';
         }
-        console.log(`Mouse click detected: button=${eventData.button}, type=${specificEventType}`);
       } else if (eventType === 'scroll') {
         // Differentiate between scroll up and scroll down
         specificEventType = eventData.deltaY > 0 ? 'scrollDown' : 'scrollUp';
@@ -128,20 +195,42 @@ const TypingBehaviorDetector = () => {
       if (previousEvent.current && previousTimestamp.current) {
         const interval = currentTimestamp - previousTimestamp.current;
         
+        // Add timestamp to event data
+        eventData.timestamp = currentTimestamp;
+        
         if (isTraining) {
           // Store training data with specific event type
           addEvent(specificEventType, eventData, interval);
         } else if (modelTrained) {
-          // Calculate anomaly score
-          const score = await calculateAnomalyScore(specificEventType, eventData, interval);
+          // Calculate anomaly score with sensitivity setting
+          const score = await calculateAnomalyScore(
+            specificEventType, 
+            eventData, 
+            interval,
+            trainingConfig.sensitivity
+          );
+          
           if (score !== null) {
-            setAnomalyScore(score.toFixed(2));
+            // Apply feature importance weighting
+            let weightedScore = score;
+            if (eventType === 'typing' && trainingConfig.featureImportance.typing !== 1.0) {
+              weightedScore *= trainingConfig.featureImportance.typing;
+            } else if (eventType === 'mouseMove' && trainingConfig.featureImportance.mouseMove !== 1.0) {
+              weightedScore *= trainingConfig.featureImportance.mouseMove;
+            } else if (eventType === 'mouseClick' && trainingConfig.featureImportance.mouseClick !== 1.0) {
+              weightedScore *= trainingConfig.featureImportance.mouseClick;
+            } else if (eventType === 'scroll' && trainingConfig.featureImportance.scroll !== 1.0) {
+              weightedScore *= trainingConfig.featureImportance.scroll;
+            }
+            
+            setAnomalyScore(weightedScore.toFixed(2));
           }
         }
       }
 
       previousEvent.current = { 
         type: specificEventType,
+        timestamp: currentTimestamp,
         ...eventData 
       };
       previousTimestamp.current = currentTimestamp;
@@ -158,7 +247,6 @@ const TypingBehaviorDetector = () => {
   };
 
   const handleMouseDown = (e) => {
-    console.log(`Mouse button pressed: ${e.button} (0=left, 1=middle, 2=right)`);
     processEvent('mouseClick', {
       button: e.button,
       clientX: e.clientX,
@@ -222,57 +310,137 @@ const TypingBehaviorDetector = () => {
     setInputValue(e.target.value);
   };
   
+  const handleConfigChange = (newConfig) => {
+    setTrainingConfig(prev => ({
+      ...prev,
+      ...newConfig
+    }));
+    
+    // If training period changed and we're still training, update the timer
+    if (isTraining && newConfig.trainingPeriod && newConfig.trainingPeriod !== trainingConfig.trainingPeriod) {
+      setTimer(newConfig.trainingPeriod);
+    }
+  };
+  
   const handleResetModel = () => {
     resetModel();
     clearInputData();
     setInputValue('');
-    setTimer(trainingTime);
+    setTimer(trainingConfig.trainingPeriod);
     setLastEventInfo('');
     setEventCount({ typing: 0, click: 0, move: 0, scroll: 0 });
+    setAnomalyHistory([]);
+    setUserStatus('original');
     throttleRef.current = { move: 0, scroll: 0 };
+    sessionId.current = Date.now().toString(36) + Math.random().toString(36).substring(2);
+  };
+  
+  const handlePauseTraining = () => {
+    pauseTraining();
+  };
+  
+  const handleResumeTraining = () => {
+    resumeTraining();
+  };
+  
+  const toggleConfig = () => {
+    setShowConfig(!showConfig);
   };
 
   return (
     <div className="typing-detector-container" ref={containerRef}>
       <div className='typing-detector'>
-      <h1>User Input Behavior Anomaly Detector</h1>
-      
-      <div className="status-section">
-        {isTraining ? (
-          <TrainingStatus 
-            timer={timer} 
-            sampleCount={inputData.length} 
-            lastEventInfo={lastEventInfo} 
-            eventCount={eventCount}
+        <h1>User Behavior Anomaly Detector</h1>
+        
+        <div className="control-panel">
+          <button 
+            className="config-button" 
+            onClick={toggleConfig}
+          >
+            {showConfig ? 'Hide Settings' : 'Show Settings'}
+          </button>
+          
+          <button 
+            className="reset-button" 
+            onClick={handleResetModel}
+          >
+            Delete Model & Restart
+          </button>
+          
+          {isTraining && inputData.length > 20 && (
+            <button 
+              className="pause-button" 
+              onClick={handlePauseTraining}
+            >
+              Finish Training Now
+            </button>
+          )}
+          
+          {!isTraining && !modelTrained && (
+            <button 
+              className="resume-button" 
+              onClick={handleResumeTraining}
+            >
+              Resume Training
+            </button>
+          )}
+        </div>
+        
+        {showConfig && (
+          <ConfigPanel 
+            config={trainingConfig} 
+            onConfigChange={handleConfigChange} 
+            isTraining={isTraining}
           />
-        ) : (
-          <PredictionStatus lastEventInfo={lastEventInfo} eventCount={eventCount} />
         )}
-      </div>
-
-      <div className="input-section">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder="Type here, click, move mouse, or scroll..."
-          className="typing-input"
-          autoFocus
+        
+        <div className="status-section">
+          {isTraining ? (
+            <TrainingStatus 
+              timer={timer} 
+              sampleCount={inputData.length} 
+              lastEventInfo={lastEventInfo} 
+              eventCount={eventCount}
+              minSamples={trainingConfig.minSamples}
+              progress={trainingProgress}
+              status={trainingStatus}
+            />
+          ) : (
+            <PredictionStatus 
+              lastEventInfo={lastEventInfo} 
+              eventCount={eventCount} 
+              userStatus={userStatus}
+            />
+          )}
+        </div>
+        
+        <div className="input-section">
+          <h3>Interact Anywhere or Type Below:</h3>
+          <textarea
+            className="input-field"
+            value={inputValue}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder={isTraining 
+              ? `Continue typing naturally for ${timer} more seconds to train the model...` 
+              : "Type here to test the model's anomaly detection..."}
+          />
+        </div>
+        
+        {modelTrained && (
+          <ScoreSection 
+            anomalyScore={anomalyScore} 
+            anomalyHistory={anomalyHistory}
+            userStatus={userStatus}
+          />
+        )}
+        
+        <InfoSection 
+          isTraining={isTraining} 
+          modelTrained={modelTrained} 
+          trainingConfig={trainingConfig}
+          sessionId={sessionId.current}
         />
-      </div>
-
-      {anomalyScore !== null && !isTraining && (
-        <ScoreSection anomalyScore={anomalyScore} />
-      )}
-
-      <div className="controls-section">
-        <button onClick={handleResetModel} className="reset-button">
-          Delete Model & Restart
-        </button>
-      </div>
-
-      <InfoSection trainingTime={trainingTime} />
       </div>
     </div>
   );

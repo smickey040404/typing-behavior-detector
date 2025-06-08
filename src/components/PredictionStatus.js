@@ -1,9 +1,63 @@
 import React from 'react';
 
-export const PredictionStatus = ({ lastEventInfo, eventCount }) => {
+export const PredictionStatus = ({ lastEventInfo, eventCount, userStatus }) => {
+  // Get appropriate status message and styles based on user status
+  const getUserStatusInfo = () => {
+    switch (userStatus) {
+      case 'original':
+        return {
+          icon: '✅',
+          message: 'Original User Detected',
+          description: 'Your behavior matches the trained profile.',
+          className: 'user-status-original'
+        };
+      case 'unknown':
+        return {
+          icon: '⚠️',
+          message: 'Uncertain User Identity',
+          description: 'Some behavioral patterns differ from the trained profile.',
+          className: 'user-status-unknown'
+        };
+      case 'different':
+        return {
+          icon: '🚫',
+          message: 'Different User Detected',
+          description: 'Behavior patterns significantly different from trained profile.',
+          className: 'user-status-different'
+        };
+      default:
+        return {
+          icon: '🔍',
+          message: 'Analyzing User Behavior',
+          description: 'Collecting data to determine user identity...',
+          className: 'user-status-analyzing'
+        };
+    }
+  };
+  
+  const statusInfo = getUserStatusInfo();
+  
   return (
     <div className="prediction-status">
-      <p>Model trained! Continue interacting to see anomaly detection</p>
+      <div className="prediction-header">
+        <h2>Detection Mode</h2>
+        <div className={`user-status ${statusInfo.className}`}>
+          <span className="user-status-icon">{statusInfo.icon}</span>
+          <div className="user-status-text">
+            <div className="user-status-message">{statusInfo.message}</div>
+            <div className="user-status-description">{statusInfo.description}</div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="prediction-instructions">
+        <p>The system is now monitoring for user behavior anomalies:</p>
+        <ul>
+          <li>Continue using your device naturally</li>
+          <li>Have someone else try using it to see the anomaly detection in action</li>
+          <li>Watch the anomaly score to see how the system detects different users</li>
+        </ul>
+      </div>
       
       <div className="event-stats-container">
         <h3 className="event-stats-title">Event Activity</h3>
@@ -44,7 +98,9 @@ export const PredictionStatus = ({ lastEventInfo, eventCount }) => {
       </div>
       
       {lastEventInfo && (
-        <p className="last-event">Last event: {lastEventInfo}</p>
+        <div className="event-feedback">
+          <p className="last-event">Last detected event: <strong>{lastEventInfo}</strong></p>
+        </div>
       )}
     </div>
   );

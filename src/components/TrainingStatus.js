@@ -1,11 +1,67 @@
 import React from 'react';
 
-export const TrainingStatus = ({ timer, sampleCount, lastEventInfo, eventCount }) => {
+export const TrainingStatus = ({ timer, sampleCount, lastEventInfo, eventCount, minSamples, progress, status }) => {
+  // Calculate sample collection progress
+  const sampleProgress = Math.min(100, Math.floor((sampleCount / minSamples) * 100));
+  
+  // Format time remaining in MM:SS format
+  const formatTimeRemaining = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+  
   return (
     <div className="training-status">
-      <p>Training in progress... {timer}s remaining</p>
-      <p>Please type, click, move and scroll naturally in the area below</p>
-      <p className="sample-count">Samples collected: {sampleCount}</p>
+      <div className="training-header">
+        <h2>Training Mode</h2>
+        <div className="training-timer">
+          <span className="timer-label">Time remaining:</span>
+          <span className="timer-value">{formatTimeRemaining(timer)}</span>
+        </div>
+      </div>
+      
+      <div className="training-progress-container">
+        <div className="progress-section">
+          <div className="progress-label">
+            <span>Data Collection:</span>
+            <span className="progress-value">{sampleProgress}%</span>
+          </div>
+          <div className="progress-bar-container">
+            <div className="progress-bar" style={{ width: `${sampleProgress}%` }}></div>
+          </div>
+          <div className="progress-details">
+            Samples: {sampleCount} / {minSamples} minimum required
+          </div>
+        </div>
+        
+        {progress > 0 && (
+          <div className="progress-section">
+            <div className="progress-label">
+              <span>Model Training:</span>
+              <span className="progress-value">{progress}%</span>
+            </div>
+            <div className="progress-bar-container">
+              <div className="progress-bar" style={{ width: `${progress}%` }}></div>
+            </div>
+            <div className="progress-details">
+              {status || 'Preparing to train model...'}
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <div className="training-instructions">
+        <p>Please continue using your device naturally:</p>
+        <ul>
+          <li>Type text in the box below</li>
+          <li>Move your mouse around the page</li>
+          <li>Click on different areas</li>
+          <li>Scroll up and down</li>
+          <li>Use keyboard shortcuts</li>
+        </ul>
+        <p>The more varied your interaction, the better the model will learn your behavior patterns.</p>
+      </div>
       
       <div className="event-stats-container">
         <h3 className="event-stats-title">Event Activity</h3>
@@ -46,7 +102,9 @@ export const TrainingStatus = ({ timer, sampleCount, lastEventInfo, eventCount }
       </div>
       
       {lastEventInfo && (
-        <p className="last-event">Last event: {lastEventInfo}</p>
+        <div className="event-feedback">
+          <p className="last-event">Last detected event: <strong>{lastEventInfo}</strong></p>
+        </div>
       )}
     </div>
   );
